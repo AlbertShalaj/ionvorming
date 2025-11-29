@@ -233,14 +233,25 @@
             );
         };
 
+        const FeedbackMessage = ({ feedback }) => {
+            if (!feedback.message) return null;
+            const isError = feedback.type === 'error';
+            return (
+                <div className={`flex items-center justify-center gap-2 font-medium animate-pulse-fast ${isError ? 'text-red-500' : 'text-emerald-600'}`}>
+                    {isError ? <XIcon /> : <CheckIcon />}
+                    <span>{feedback.message}</span>
+                </div>
+            );
+        };
+
         // Main App Component
         const App = () => {
             const [currentElement, setCurrentElement] = useState(null);
             const [step, setStep] = useState(0);
+            const [feedback, setFeedback] = useState({ message: "", type: "" });
 
             // Step 1 State
             const [configInput, setConfigInput] = useState("");
-            const [configError, setConfigError] = useState(false);
             const [parsedElectrons, setParsedElectrons] = useState(0);
 
             // Step 2 State
@@ -254,9 +265,7 @@
             const [leftElectronCount, setLeftElectronCount] = useState("");
             const [rightElectronCount, setRightElectronCount] = useState("");
             const [ionChargeInput, setIonChargeInput] = useState("");
-            const [ionInputError, setIonInputError] = useState("");
             const [eqSuccess, setEqSuccess] = useState(false);
-            const [eqError, setEqError] = useState(false);
 
             useEffect(() => {
                 startNewRound();
@@ -277,6 +286,14 @@
                 }
             }, [configInput, step]);
 
+            const showFeedback = (message, type = 'error') => {
+                setFeedback({ message, type });
+            };
+
+            const clearFeedback = () => {
+                setFeedback({ message: "", type: "" });
+            };
+
             const startNewRound = () => {
                 // Filter out Group 14 (valence 4) and Group 18 (Noble Gases)
                 const validElements = ELEMENTS.filter(e => {
@@ -290,7 +307,6 @@
                 setCurrentElement(randomElement);
                 setStep(0);
                 setConfigInput("");
-                setConfigError(false);
                 setParsedElectrons(0);
                 setActionType(null);
                 setElectronCount(0);
@@ -300,9 +316,8 @@
                 setLeftElectronCount("");
                 setRightElectronCount("");
                 setIonChargeInput("");
-                setIonInputError("");
                 setEqSuccess(false);
-                setEqError(false);
+                clearFeedback();
             };
 
             const handleConfigSubmit = () => {
@@ -315,11 +330,10 @@
 
                 if (input === expected || input === expectedAlt || input === expectedAlt2 || input === expectedAlt3) {
                     setStep(1);
-                    setConfigError(false);
-                    // Set initial electron count for next steps
+                    clearFeedback();
                     setParsedElectrons(currentElement.number);
                 } else {
-                    setConfigError(true);
+                    showFeedback("Dat klopt niet helemaal. Probeer het opnieuw.", "error");
                 }
             };
 
@@ -332,7 +346,7 @@
                         setStep(4); // Skip to success directly for noble gases
                         return;
                     } else {
-                        alert("Kijk goed naar de buitenste schil. Is deze al vol?");
+                        showFeedback("Kijk goed naar de buitenste schil. Is deze al vol?", "error");
                         return;
                     }
                 }
@@ -343,11 +357,12 @@
 
                 if (actionType === correctAction && electronCount === correctCount) {
                     setStep(2);
+                    clearFeedback();
                 } else {
                     const isDuet = currentElement.number <= 5;
                     const ruleName = isDuet ? "duetregel" : "octetregel";
                     const target = isDuet ? "2" : "8";
-                    alert(`Niet helemaal juist. Denk aan de ${ruleName} (streven naar ${target} valentie-elektronen).`);
+                    showFeedback(`Niet helemaal juist. Denk aan de ${ruleName} (streven naar ${target} valentie-elektronen).`, "error");
                 }
             };
 
@@ -358,8 +373,9 @@
 
                 if (type === correctType) {
                     setStep(3);
+                    clearFeedback();
                 } else {
-                    alert("Foutief. Onthoud: Kation is positief (verliest e-), Anion is negatief (wint e-).");
+                    showFeedback("Foutief. Onthoud: Kation is positief (verliest e-), Anion is negatief (wint e-).", "error");
                 }
             };
 
@@ -372,14 +388,14 @@
                 const activeSide = leftElectronCount ? 'left' : (rightElectronCount ? 'right' : null);
 
                 if (!activeSide) {
-                    setIonInputError("Vergeet de elektronen niet in te vullen.");
+                    showFeedback("Vergeet de elektronen niet in te vullen.", "error");
                     return;
                 }
 
                 if (activeSide !== correctSide) {
-                    setIonInputError(isMetal
+                    showFeedback(isMetal
                         ? "Metalen verliezen elektronen. Zet de elektronen aan de rechterkant (producten)."
-                        : "Niet-metalen nemen elektronen op. Zet de elektronen aan de linkerkant (reactanten).");
+                        : "Niet-metalen nemen elektronen op. Zet de elektronen aan de linkerkant (reactanten).", "error");
                     return;
                 }
 
@@ -387,7 +403,7 @@
                 const targetCount = isMetal ? valence : (8 - valence);
 
                 if (inputCount !== targetCount) {
-                    setIonInputError(`Het aantal elektronen klopt niet. ${currentElement.name} moet ${targetCount} elektron${targetCount > 1 ? 'en' : ''} ${isMetal ? 'afstaan' : 'opnemen'}.`);
+                    showFeedback(`Het aantal elektronen klopt niet. ${currentElement.name} moet ${targetCount} elektron${targetCount > 1 ? 'en' : ''} ${isMetal ? 'afstaan' : 'opnemen'}.`, "error");
                     return;
                 }
 
@@ -404,36 +420,38 @@
                 if (!match) {
                     // Check for common error: Sign before number (e.g. +2)
                     if (chargeInput.match(/^[+-]\d+$/)) {
-                        setIonInputError("Schrijf eerst het getal, dan de lading (bv. 2+).");
+                        showFeedback("Schrijf eerst het getal, dan de lading (bv. 2+).", "error");
                         return;
                     }
-                    setIonInputError("Ongeldige lading. Gebruik bv. 2+ of -.");
+                    showFeedback("Ongeldige lading. Gebruik bv. 2+ of -.", "error");
                     return;
                 }
 
                 const [_, numStr, signStr] = match;
 
                 if (signStr !== sign) {
-                    setIonInputError(`Het ion moet ${sign === '+' ? 'positief' : 'negatief'} zijn.`);
+                    showFeedback(`Het ion moet ${sign === '+' ? 'positief' : 'negatief'} zijn.`, "error");
                     return;
                 }
 
                 const numVal = numStr === "" ? 1 : parseInt(numStr);
 
                 if (numVal !== absCharge) {
-                    setIonInputError(`De ladingwaarde klopt niet. Het moet ${absCharge === 1 ? '' : absCharge}${sign} zijn.`);
+                    showFeedback(`De ladingwaarde klopt niet. Het moet ${absCharge === 1 ? '' : absCharge}${sign} zijn.`, "error");
                     return;
                 }
 
                 if (absCharge === 1 && numStr === "1") {
-                    alert("Correct, maar we laten de '1' meestal weg (bv. + of -).");
+                    showFeedback("Correct, maar we laten de '1' meestal weg (bv. + of -).", "success");
+                } else {
+                    showFeedback(`Correct! Je hebt het ${currentElement.name}-ion correct gevormd.`, "success");
                 }
 
                 setEqSuccess(true);
-                setIonInputError("");
                 setTimeout(() => {
                     setStep(4);
                     setEqSuccess(false);
+                    clearFeedback();
                 }, 1500);
             };
 
@@ -493,20 +511,16 @@
                                         <input
                                             type="text"
                                             value={configInput}
-                                            onChange={(e) => setConfigInput(e.target.value)}
+                                            onChange={(e) => { setConfigInput(e.target.value); clearFeedback(); }}
                                             placeholder="2/8/..."
-                                            className={`w-48 px-4 py-3 rounded-xl border-2 outline-none text-lg transition-colors ${configError ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-blue-500'}`}
+                                            className={`w-48 px-4 py-3 rounded-xl border-2 outline-none text-lg transition-colors ${feedback.type === 'error' ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-blue-500'}`}
                                             onKeyDown={(e) => e.key === 'Enter' && handleConfigSubmit()}
                                         />
                                         <Button onClick={handleConfigSubmit}>
                                             Controleren
                                         </Button>
                                     </div>
-                                    {configError && (
-                                        <p className="text-red-500 text-sm flex items-center gap-2">
-                                            <XIcon /> Dat klopt niet helemaal. Probeer het opnieuw.
-                                        </p>
-                                    )}
+                                    <FeedbackMessage feedback={feedback} />
                                 </div>
                             )}
 
@@ -524,19 +538,19 @@
                                     <div className="flex flex-col gap-4">
                                         <div className="flex flex-wrap gap-4 justify-center">
                                             <button
-                                                onClick={() => { setActionType('donate'); setElectronCount(0); }}
+                                                onClick={() => { setActionType('donate'); setElectronCount(0); clearFeedback(); }}
                                                 className={`px-6 py-4 rounded-xl border-2 font-semibold transition-all ${actionType === 'donate' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 hover:border-blue-300'}`}
                                             >
                                                 Afstaan (Metalen)
                                             </button>
                                             <button
-                                                onClick={() => { setActionType('accept'); setElectronCount(0); }}
+                                                onClick={() => { setActionType('accept'); setElectronCount(0); clearFeedback(); }}
                                                 className={`px-6 py-4 rounded-xl border-2 font-semibold transition-all ${actionType === 'accept' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 hover:border-blue-300'}`}
                                             >
                                                 Opnemen (Niet-Metalen)
                                             </button>
                                             <button
-                                                onClick={() => { setActionType('stable'); setElectronCount(0); }}
+                                                onClick={() => { setActionType('stable'); setElectronCount(0); clearFeedback(); }}
                                                 className={`px-6 py-4 rounded-xl border-2 font-semibold transition-all ${actionType === 'stable' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 hover:border-emerald-300'}`}
                                             >
                                                 Is al stabiel
@@ -548,12 +562,12 @@
                                                 <p className="font-medium text-slate-700">Hoeveel elektronen?</p>
                                                 <div className="flex items-center gap-6">
                                                     <button
-                                                        onClick={() => setElectronCount(Math.max(0, electronCount - 1))}
+                                                        onClick={() => { setElectronCount(Math.max(0, electronCount - 1)); clearFeedback(); }}
                                                         className="w-10 h-10 rounded-full bg-white border border-slate-300 flex items-center justify-center hover:bg-slate-100"
                                                     >-</button>
                                                     <span className="text-2xl font-bold w-8 text-center">{electronCount}</span>
                                                     <button
-                                                        onClick={() => setElectronCount(electronCount + 1)}
+                                                        onClick={() => { setElectronCount(electronCount + 1); clearFeedback(); }}
                                                         className="w-10 h-10 rounded-full bg-white border border-slate-300 flex items-center justify-center hover:bg-slate-100"
                                                     >+</button>
                                                 </div>
@@ -561,7 +575,8 @@
                                         )}
 
                                         {actionType && (
-                                            <div className="flex justify-center mt-2">
+                                            <div className="flex flex-col items-center gap-4 mt-2">
+                                                <FeedbackMessage feedback={feedback} />
                                                 <Button onClick={handleStabilityCheck} className="px-8">
                                                     Bevestigen
                                                 </Button>
@@ -583,20 +598,21 @@
                                     </div>
                                     <div className="flex flex-wrap justify-center gap-4">
                                         <button
-                                            onClick={() => handleIonCheck('cation')}
+                                            onClick={() => { handleIonCheck('cation'); }}
                                             className="w-64 p-6 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left"
                                         >
                                             <div className="font-bold text-lg text-slate-800 group-hover:text-blue-700 mb-1">Kation</div>
                                             <div className="text-sm text-slate-500">Positief geladen ion (+)</div>
                                         </button>
                                         <button
-                                            onClick={() => handleIonCheck('anion')}
+                                            onClick={() => { handleIonCheck('anion'); }}
                                             className="w-64 p-6 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left"
                                         >
                                             <div className="font-bold text-lg text-slate-800 group-hover:text-blue-700 mb-1">Anion</div>
                                             <div className="text-sm text-slate-500">Negatief geladen ion (-)</div>
                                         </button>
                                     </div>
+                                    <FeedbackMessage feedback={feedback} />
                                 </div>
                             )}
 
@@ -630,6 +646,7 @@
                                                             onChange={(e) => {
                                                                 setLeftElectronCount(e.target.value);
                                                                 if (e.target.value) setRightElectronCount("");
+                                                                clearFeedback();
                                                             }}
                                                             className="w-8 text-center bg-transparent outline-none font-bold text-amber-600"
                                                         />
@@ -648,7 +665,7 @@
                                                     <input
                                                         type="text"
                                                         value={ionChargeInput}
-                                                        onChange={(e) => setIonChargeInput(e.target.value)}
+                                                        onChange={(e) => { setIonChargeInput(e.target.value); clearFeedback(); }}
                                                         placeholder="?"
                                                         className="absolute -top-6 left-full ml-1 w-12 h-10 text-center text-lg font-bold border-2 border-blue-200 rounded bg-white focus:border-blue-500 outline-none shadow-sm"
                                                     />
@@ -666,6 +683,7 @@
                                                             onChange={(e) => {
                                                                 setRightElectronCount(e.target.value);
                                                                 if (e.target.value) setLeftElectronCount("");
+                                                                clearFeedback();
                                                             }}
                                                             className="w-8 text-center bg-transparent outline-none font-bold text-amber-600"
                                                         />
@@ -678,13 +696,8 @@
                                         {/* Helper Text */}
                                         <div className="flex flex-col items-center gap-2">
                                             <p className="text-sm text-slate-500">Vul het aantal elektronen in aan de juiste kant en geef de lading van het ion aan.</p>
+                                            <FeedbackMessage feedback={feedback} />
                                         </div>
-
-                                        {ionInputError && (
-                                            <p className="text-red-500 text-center font-medium animate-bounce">
-                                                <XIcon /> {ionInputError}
-                                            </p>
-                                        )}
                                     </div>
 
                                     <div className="flex justify-center">
