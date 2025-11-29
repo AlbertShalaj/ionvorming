@@ -170,7 +170,7 @@
                         ${protonActive ? 'bg-red-100 text-red-700 border border-red-200' : 'opacity-0'}
                         ${isExcessProton ? 'animate-obnoxious-red ring-4 ring-red-400 z-10' : ''}
                      `}>
-                        {protonActive ? 'p+' : ''}
+                        {protonActive ? <span>p<sup>+</sup></span> : ''}
                     </div>
 
                     {/* Electron */}
@@ -178,7 +178,7 @@
                         ${electronActive ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'opacity-0'}
                         ${isExcessElectron ? 'animate-obnoxious-blue ring-4 ring-blue-400 z-10' : ''}
                      `}>
-                        {electronActive ? 'e-' : ''}
+                        {electronActive ? <span>e<sup>-</sup></span> : ''}
                     </div>
                 </div>
             )
@@ -251,10 +251,12 @@
             const [ionSelection, setIonSelection] = useState(null);
 
             // Step 4 State
-            const [eqCharge, setEqCharge] = useState(0);
-            const [eqElectrons, setEqElectrons] = useState(0);
-            const [eqError, setEqError] = useState(false);
+            const [leftElectronCount, setLeftElectronCount] = useState("");
+            const [rightElectronCount, setRightElectronCount] = useState("");
+            const [ionChargeInput, setIonChargeInput] = useState("");
+            const [ionInputError, setIonInputError] = useState("");
             const [eqSuccess, setEqSuccess] = useState(false);
+            const [eqError, setEqError] = useState(false);
 
             useEffect(() => {
                 startNewRound();
@@ -276,7 +278,15 @@
             }, [configInput, step]);
 
             const startNewRound = () => {
-                const randomElement = ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)];
+                // Filter out Group 14 (valence 4) and Group 18 (Noble Gases)
+                const validElements = ELEMENTS.filter(e => {
+                    const valence = e.config[e.config.length - 1];
+                    const isGroup14 = valence === 4;
+                    const isNobleGas = valence === 8 || (e.number === 2 && valence === 2);
+                    return !isGroup14 && !isNobleGas;
+                });
+
+                const randomElement = validElements[Math.floor(Math.random() * validElements.length)];
                 setCurrentElement(randomElement);
                 setStep(0);
                 setConfigInput("");
@@ -285,10 +295,14 @@
                 setActionType(null);
                 setElectronCount(0);
                 setIonSelection(null);
-                setEqCharge(0);
-                setEqElectrons(0);
-                setEqError(false);
+
+                // Reset Step 4 state
+                setLeftElectronCount("");
+                setRightElectronCount("");
+                setIonChargeInput("");
+                setIonInputError("");
                 setEqSuccess(false);
+                setEqError(false);
             };
 
             const handleConfigSubmit = () => {
@@ -330,7 +344,10 @@
                 if (actionType === correctAction && electronCount === correctCount) {
                     setStep(2);
                 } else {
-                    alert("Niet helemaal juist. Denk aan de octetregel (streven naar 8 of 0 valentie-elektronen).");
+                    const isDuet = currentElement.number <= 5;
+                    const ruleName = isDuet ? "duetregel" : "octetregel";
+                    const target = isDuet ? "2" : "8";
+                    alert(`Niet helemaal juist. Denk aan de ${ruleName} (streven naar ${target} valentie-elektronen).`);
                 }
             };
 
@@ -350,19 +367,74 @@
                 const valence = currentElement.config[currentElement.config.length - 1];
                 const isMetal = valence <= 3;
 
-                const targetCharge = isMetal ? valence : -(8 - valence);
-                const targetElectrons = isMetal ? valence : (8 - valence);
+                // 1. Validate Electron Side & Amount
+                const correctSide = isMetal ? 'right' : 'left';
+                const activeSide = leftElectronCount ? 'left' : (rightElectronCount ? 'right' : null);
 
-                if (eqCharge === targetCharge && eqElectrons === targetElectrons) {
-                    setEqSuccess(true);
-                    setTimeout(() => {
-                        setStep(4);
-                        setEqSuccess(false);
-                    }, 1500); // Wait for animation
-                    setEqError(false);
-                } else {
-                    setEqError(true);
+                if (!activeSide) {
+                    setIonInputError("Vergeet de elektronen niet in te vullen.");
+                    return;
                 }
+
+                if (activeSide !== correctSide) {
+                    setIonInputError(isMetal
+                        ? "Metalen verliezen elektronen. Zet de elektronen aan de rechterkant (producten)."
+                        : "Niet-metalen nemen elektronen op. Zet de elektronen aan de linkerkant (reactanten).");
+                    return;
+                }
+
+                const inputCount = parseInt(activeSide === 'left' ? leftElectronCount : rightElectronCount);
+                const targetCount = isMetal ? valence : (8 - valence);
+
+                if (inputCount !== targetCount) {
+                    setIonInputError(`Het aantal elektronen klopt niet. ${currentElement.name} moet ${targetCount} elektron${targetCount > 1 ? 'en' : ''} ${isMetal ? 'afstaan' : 'opnemen'}.`);
+                    return;
+                }
+
+                // 2. Validate Ion Charge
+                const targetChargeVal = isMetal ? valence : -(8 - valence);
+                const absCharge = Math.abs(targetChargeVal);
+                const sign = targetChargeVal > 0 ? '+' : '-';
+
+                const chargeInput = ionChargeInput.trim();
+
+                // Regex for Charge: ^(\d*)([+-])$
+                const match = chargeInput.match(/^(\d*)([+-])$/);
+
+                if (!match) {
+                    // Check for common error: Sign before number (e.g. +2)
+                    if (chargeInput.match(/^[+-]\d+$/)) {
+                        setIonInputError("Schrijf eerst het getal, dan de lading (bv. 2+).");
+                        return;
+                    }
+                    setIonInputError("Ongeldige lading. Gebruik bv. 2+ of -.");
+                    return;
+                }
+
+                const [_, numStr, signStr] = match;
+
+                if (signStr !== sign) {
+                    setIonInputError(`Het ion moet ${sign === '+' ? 'positief' : 'negatief'} zijn.`);
+                    return;
+                }
+
+                const numVal = numStr === "" ? 1 : parseInt(numStr);
+
+                if (numVal !== absCharge) {
+                    setIonInputError(`De ladingwaarde klopt niet. Het moet ${absCharge === 1 ? '' : absCharge}${sign} zijn.`);
+                    return;
+                }
+
+                if (absCharge === 1 && numStr === "1") {
+                    alert("Correct, maar we laten de '1' meestal weg (bv. + of -).");
+                }
+
+                setEqSuccess(true);
+                setIonInputError("");
+                setTimeout(() => {
+                    setStep(4);
+                    setEqSuccess(false);
+                }, 1500);
             };
 
             if (!currentElement) return <div className="flex items-center justify-center h-screen">Laden...</div>;
@@ -533,80 +605,87 @@
                                 <div className="space-y-4 animate-fade-in">
                                     <div>
                                         <h3 className="text-xl font-semibold mb-2">Stap 4: Reactievergelijking</h3>
-                                        <p className="text-slate-600">Maak de reactie kloppend.</p>
+                                        <p className="text-slate-600">Sleep het elektron naar de juiste kant en vul de ion-formule in.</p>
                                     </div>
 
-                                    <div className={`relative p-8 rounded-xl flex flex-wrap items-center justify-center gap-4 text-xl md:text-2xl font-mono transition-all duration-500
+                                    <div className={`relative p-8 rounded-xl flex flex-col items-center gap-8 transition-all duration-500
                                         ${eqSuccess ? 'bg-green-50 border-green-200 shadow-[0_0_30px_rgba(34,197,94,0.3)]' : 'bg-white/90 border border-slate-200 shadow-xl backdrop-blur-sm'}
                                     `}>
-                                        {isMetal ? (
-                                            <>
-                                                <span className="font-bold text-slate-800">{currentElement.symbol}</span>
-                                                <ArrowRightIcon />
-                                                <span className="text-blue-600 flex items-center font-bold">
-                                                    {currentElement.symbol}
-                                                    <sup className="flex items-center ml-1">
-                                                        <select
-                                                            value={eqCharge}
-                                                            onChange={e => setEqCharge(parseInt(e.target.value))}
-                                                            className="bg-slate-100 border border-slate-300 rounded px-1 py-0.5 text-sm outline-none focus:border-blue-500 cursor-pointer"
-                                                        >
-                                                            <option value="0">?</option>
-                                                            {[1, 2, 3, 4].map(n => <option key={n} value={n}>{formatCharge(n)}</option>)}
-                                                        </select>
-                                                    </sup>
-                                                </span>
-                                                <span>+</span>
-                                                <span className="text-amber-500 flex items-center font-bold">
-                                                    <select
-                                                        value={eqElectrons}
-                                                        onChange={e => setEqElectrons(parseInt(e.target.value))}
-                                                        className="bg-slate-100 border border-slate-300 rounded px-1 py-0.5 text-sm outline-none focus:border-amber-500 cursor-pointer mr-1"
-                                                    >
-                                                        <option value="0">?</option>
-                                                        {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
-                                                    </select>
-                                                    e<sup>-</sup>
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span className="font-bold text-slate-800">{currentElement.symbol}</span>
-                                                <span>+</span>
-                                                <span className="text-amber-500 flex items-center font-bold">
-                                                    <select
-                                                        value={eqElectrons}
-                                                        onChange={e => setEqElectrons(parseInt(e.target.value))}
-                                                        className="bg-slate-100 border border-slate-300 rounded px-1 py-0.5 text-sm outline-none focus:border-amber-500 cursor-pointer mr-1"
-                                                    >
-                                                        <option value="0">?</option>
-                                                        {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
-                                                    </select>
-                                                    e<sup>-</sup>
-                                                </span>
-                                                <ArrowRightIcon />
-                                                <span className="text-blue-600 flex items-center font-bold">
-                                                    {currentElement.symbol}
-                                                    <sup className="flex items-center ml-1">
-                                                        <select
-                                                            value={eqCharge}
-                                                            onChange={e => setEqCharge(parseInt(e.target.value))}
-                                                            className="bg-slate-100 border border-slate-300 rounded px-1 py-0.5 text-sm outline-none focus:border-blue-500 cursor-pointer"
-                                                        >
-                                                            <option value="0">?</option>
-                                                            {[-1, -2, -3, -4].map(n => <option key={n} value={n}>{formatCharge(n)}</option>)}
-                                                        </select>
-                                                    </sup>
-                                                </span>
-                                            </>
+                                        {/* Equation Row */}
+                                        <div className="flex flex-wrap items-center justify-center gap-4 text-xl md:text-2xl font-mono">
+
+                                            {/* Reactant Side */}
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-slate-800 text-4xl">{currentElement.symbol}</span>
+
+                                                {/* Left Electron Input Group */}
+                                                <div className="flex items-center gap-2 transition-all duration-300">
+                                                    <span className={`text-2xl font-bold text-slate-400 transition-opacity ${leftElectronCount ? 'opacity-100' : 'opacity-0'}`}>+</span>
+                                                    <div className={`flex items-center gap-1 bg-amber-50 border-2 rounded-lg px-2 py-1 transition-all ${leftElectronCount ? 'border-amber-400 opacity-100' : 'border-dashed border-slate-300 opacity-50 hover:opacity-100'}`}>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            max="8"
+                                                            value={leftElectronCount}
+                                                            onChange={(e) => {
+                                                                setLeftElectronCount(e.target.value);
+                                                                if (e.target.value) setRightElectronCount("");
+                                                            }}
+                                                            className="w-8 text-center bg-transparent outline-none font-bold text-amber-600"
+                                                        />
+                                                        {!rightElectronCount && <span className="text-amber-600 font-bold">e<sup>-</sup></span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <ArrowRightIcon />
+
+                                            {/* Product Side */}
+                                            <div className="flex items-center gap-2">
+                                                {/* Atom with Superscript Input */}
+                                                <div className="relative ml-2 mr-16">
+                                                    <span className="font-bold text-slate-800 text-4xl">{currentElement.symbol}</span>
+                                                    <input
+                                                        type="text"
+                                                        value={ionChargeInput}
+                                                        onChange={(e) => setIonChargeInput(e.target.value)}
+                                                        placeholder="?"
+                                                        className="absolute -top-6 left-full ml-1 w-12 h-10 text-center text-lg font-bold border-2 border-blue-200 rounded bg-white focus:border-blue-500 outline-none shadow-sm"
+                                                    />
+                                                </div>
+
+                                                {/* Right Electron Input Group */}
+                                                <div className="flex items-center gap-2 transition-all duration-300 ml-8">
+                                                    <span className={`text-2xl font-bold text-slate-400 transition-opacity ${rightElectronCount ? 'opacity-100' : 'opacity-0'}`}>+</span>
+                                                    <div className={`flex items-center gap-1 bg-amber-50 border-2 rounded-lg px-2 py-1 transition-all ${rightElectronCount ? 'border-amber-400 opacity-100' : 'border-dashed border-slate-300 opacity-50 hover:opacity-100'}`}>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            max="8"
+                                                            value={rightElectronCount}
+                                                            onChange={(e) => {
+                                                                setRightElectronCount(e.target.value);
+                                                                if (e.target.value) setLeftElectronCount("");
+                                                            }}
+                                                            className="w-8 text-center bg-transparent outline-none font-bold text-amber-600"
+                                                        />
+                                                        {!leftElectronCount && <span className="text-amber-600 font-bold">e<sup>-</sup></span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Helper Text */}
+                                        <div className="flex flex-col items-center gap-2">
+                                            <p className="text-sm text-slate-500">Vul het aantal elektronen in aan de juiste kant en geef de lading van het ion aan.</p>
+                                        </div>
+
+                                        {ionInputError && (
+                                            <p className="text-red-500 text-center font-medium animate-bounce">
+                                                <XIcon /> {ionInputError}
+                                            </p>
                                         )}
                                     </div>
-
-                                    {eqError && (
-                                        <p className="text-red-500 text-center font-medium animate-bounce">
-                                            Nog niet helemaal juist.
-                                        </p>
-                                    )}
 
                                     <div className="flex justify-center">
                                         <Button onClick={handleEquationCheck} variant="success" className="px-8">
