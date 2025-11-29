@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IonLab - Chemie Leren</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        success: '#059669',
+                        danger: '#DC2626',
+                        accent: '#7C3AED',
+                        surface: '#ffffff',
+                        background: '#f8fafc',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer base {
+            html {
+                font-family: 'Inter', sans-serif;
+            }
+        }
+        @layer components {
+            .inner-shadow {
+                box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+            }
+        }
+        @layer utilities {
+            .animate-fade-in {
+                animation: fadeIn 0.5s ease-out forwards;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .animate-pulse-fast {
+                animation: pulseFast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+            @keyframes pulseFast {
+                0%, 100% { opacity: 1; }
+                50% { opacity: .5; }
+            }
+            .animate-obnoxious-red {
+                animation: obnoxiousRed 1s ease-in-out infinite;
+            }
+            @keyframes obnoxiousRed {
+                0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+                50% { transform: scale(1.1); opacity: 0.7; box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            }
+            .animate-obnoxious-blue {
+                animation: obnoxiousBlue 1s ease-in-out infinite;
+            }
+            @keyframes obnoxiousBlue {
+                0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+                50% { transform: scale(1.1); opacity: 0.7; box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-background text-slate-800 antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // Element Data (Z=1 to Z=18)
+        const ELEMENTS = [
+            { symbol: 'H', name: 'Waterstof', number: 1, config: [1] },
+            { symbol: 'He', name: 'Helium', number: 2, config: [2] },
+            { symbol: 'Li', name: 'Lithium', number: 3, config: [2, 1] },
+            { symbol: 'Be', name: 'Beryllium', number: 4, config: [2, 2] },
+            { symbol: 'B', name: 'Boor', number: 5, config: [2, 3] },
+            { symbol: 'C', name: 'Koolstof', number: 6, config: [2, 4] },
+            { symbol: 'N', name: 'Stikstof', number: 7, config: [2, 5] },
+            { symbol: 'O', name: 'Zuurstof', number: 8, config: [2, 6] },
+            { symbol: 'F', name: 'Fluor', number: 9, config: [2, 7] },
+            { symbol: 'Ne', name: 'Neon', number: 10, config: [2, 8] },
+            { symbol: 'Na', name: 'Natrium', number: 11, config: [2, 8, 1] },
+            { symbol: 'Mg', name: 'Magnesium', number: 12, config: [2, 8, 2] },
+            { symbol: 'Al', name: 'Aluminium', number: 13, config: [2, 8, 3] },
+            { symbol: 'Si', name: 'Silicium', number: 14, config: [2, 8, 4] },
+            { symbol: 'P', name: 'Fosfor', number: 15, config: [2, 8, 5] },
+            { symbol: 'S', name: 'Zwavel', number: 16, config: [2, 8, 6] },
+            { symbol: 'Cl', name: 'Chloor', number: 17, config: [2, 8, 7] },
+            { symbol: 'Ar', name: 'Argon', number: 18, config: [2, 8, 8] },
+        ];
+
+        // Icons
+        const CheckIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+        );
+
+        const XIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        );
+
+        const ArrowRightIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+        );
+
+        // Helper to format charge (e.g., 1 -> +, 2 -> 2+, -1 -> -, -2 -> 2-)
+        const formatCharge = (charge) => {
+            if (charge === 0) return "0";
+            const abs = Math.abs(charge);
+            const sign = charge > 0 ? "+" : "-";
+            if (abs === 1) return sign;
+            return `${abs}${sign}`;
+        };
+
+        const formatElectronCount = (count) => {
+            if (count <= 0) return "";
+            if (count === 1) return "e⁻";
+            return `${count}e⁻`;
+        };
+
+        // Components
+        const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false }) => {
+            const baseStyle = "px-6 py-3 rounded-xl font-semibold shadow-md transition-all duration-200 ease-in-out transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2";
+            const variants = {
+                primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200",
+                success: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-200",
+                danger: "bg-red-600 text-white hover:bg-red-700 shadow-red-200",
+                outline: "bg-white text-slate-700 border-2 border-slate-200 hover:border-blue-500 hover:text-blue-600",
+                ghost: "bg-transparent text-slate-600 hover:bg-slate-100 shadow-none",
+            };
+
+            return (
+                <button
+                    onClick={onClick}
+                    disabled={disabled}
+                    className={`${baseStyle} ${variants[variant]} ${className}`}
+                >
+                    {children}
+                </button>
+            );
+        };
+
+        const Card = ({ children, className = '' }) => (
+            <div className={`bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden ${className}`}>
+                {children}
+            </div>
+        );
+
+        const ParticlePair = ({ protonActive, electronActive, isExcessProton, isExcessElectron }) => {
+            return (
+                <div className="flex flex-col gap-1 items-center">
+                    {/* Proton */}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm transition-all duration-300
+                        ${protonActive ? 'bg-red-100 text-red-700 border border-red-200' : 'opacity-0'}
+                        ${isExcessProton ? 'animate-obnoxious-red ring-4 ring-red-400 z-10' : ''}
+                     `}>
+                        {protonActive ? 'p+' : ''}
+                    </div>
+
+                    {/* Electron */}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm transition-all duration-300
+                        ${electronActive ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'opacity-0'}
+                        ${isExcessElectron ? 'animate-obnoxious-blue ring-4 ring-blue-400 z-10' : ''}
+                     `}>
+                        {electronActive ? 'e-' : ''}
+                    </div>
+                </div>
+            )
+        };
+
+        const VisualModel = ({ element, displayedElectronCount, showConfig }) => {
+            const protonCount = element.number;
+            const maxCount = Math.max(protonCount, displayedElectronCount);
+            const pairs = Array.from({ length: maxCount }, (_, i) => i);
+
+            const netCharge = protonCount - displayedElectronCount;
+            const gapClass = maxCount > 10 ? "gap-1" : "gap-2 md:gap-4";
+
+            return (
+                <div className="w-full bg-slate-50/50 rounded-xl border border-slate-200 p-3 md:p-4">
+                    <div className={`flex flex-wrap justify-center ${gapClass}`}>
+                        {pairs.map(i => {
+                            const hasProton = i < protonCount;
+                            const hasElectron = i < displayedElectronCount;
+                            // Excess proton: Present, but no matching electron
+                            const isExcessProton = hasProton && !hasElectron;
+                            // Excess electron: Present, but no matching proton
+                            const isExcessElectron = hasElectron && !hasProton;
+
+                            return (
+                                <ParticlePair
+                                    key={i}
+                                    protonActive={hasProton}
+                                    electronActive={hasElectron}
+                                    isExcessProton={isExcessProton}
+                                    isExcessElectron={isExcessElectron}
+                                />
+                            );
+                        })}
+                    </div>
+
+                    <div className="mt-3 flex justify-between items-center text-sm text-slate-500 font-medium px-2">
+                        <div>
+                            {showConfig && (
+                                <span>
+                                    Configuratie: <span className="font-mono font-bold text-slate-700">{element.config.join("/")}</span>
+                                </span>
+                            )}
+                        </div>
+                        <div>
+                            Netto Lading: <span className={`text-lg ml-2 font-bold ${netCharge === 0 ? 'text-slate-700' : netCharge > 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                                {formatCharge(netCharge)}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Main App Component
+        const App = () => {
+            const [currentElement, setCurrentElement] = useState(null);
+            const [step, setStep] = useState(0);
+
+            // Step 1 State
+            const [configInput, setConfigInput] = useState("");
+            const [configError, setConfigError] = useState(false);
+            const [parsedElectrons, setParsedElectrons] = useState(0);
+
+            // Step 2 State
+            const [actionType, setActionType] = useState(null); // 'donate', 'accept', 'stable'
+            const [electronCount, setElectronCount] = useState(0);
+
+            // Step 3 State
+            const [ionSelection, setIonSelection] = useState(null);
+
+            // Step 4 State
+            const [eqCharge, setEqCharge] = useState(0);
+            const [eqElectrons, setEqElectrons] = useState(0);
+            const [eqError, setEqError] = useState(false);
+            const [eqSuccess, setEqSuccess] = useState(false);
+
+            useEffect(() => {
+                startNewRound();
+            }, []);
+
+            // Parse config input in real-time for visual model
+            useEffect(() => {
+                if (step === 0) {
+                    // Extract all numbers from input string
+                    const numbers = configInput.match(/\d+/g);
+                    if (numbers) {
+                        const sum = numbers.reduce((a, b) => parseInt(a) + parseInt(b), 0);
+                        // Cap at a reasonable number to prevent crash if user types huge number
+                        setParsedElectrons(Math.min(sum, 118));
+                    } else {
+                        setParsedElectrons(0);
+                    }
+                }
+            }, [configInput, step]);
+
+            const startNewRound = () => {
+                const randomElement = ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)];
+                setCurrentElement(randomElement);
+                setStep(0);
+                setConfigInput("");
+                setConfigError(false);
+                setParsedElectrons(0);
+                setActionType(null);
+                setElectronCount(0);
+                setIonSelection(null);
+                setEqCharge(0);
+                setEqElectrons(0);
+                setEqError(false);
+                setEqSuccess(false);
+            };
+
+            const handleConfigSubmit = () => {
+                const expected = currentElement.config.join("/");
+                const expectedAlt = currentElement.config.join(" ");
+                const expectedAlt2 = currentElement.config.join("-");
+                const expectedAlt3 = currentElement.config.join(",");
+
+                const input = configInput.trim();
+
+                if (input === expected || input === expectedAlt || input === expectedAlt2 || input === expectedAlt3) {
+                    setStep(1);
+                    setConfigError(false);
+                    // Set initial electron count for next steps
+                    setParsedElectrons(currentElement.number);
+                } else {
+                    setConfigError(true);
+                }
+            };
+
+            const handleStabilityCheck = () => {
+                const valence = currentElement.config[currentElement.config.length - 1];
+                const isNobleGas = valence === 8 || (currentElement.number === 2 && valence === 2);
+
+                if (isNobleGas) {
+                    if (actionType === 'stable') {
+                        setStep(4); // Skip to success directly for noble gases
+                        return;
+                    } else {
+                        alert("Kijk goed naar de buitenste schil. Is deze al vol?");
+                        return;
+                    }
+                }
+
+                const isMetal = valence <= 3;
+                const correctAction = isMetal ? 'donate' : 'accept';
+                const correctCount = isMetal ? valence : (8 - valence);
+
+                if (actionType === correctAction && electronCount === correctCount) {
+                    setStep(2);
+                } else {
+                    alert("Niet helemaal juist. Denk aan de octetregel (streven naar 8 of 0 valentie-elektronen).");
+                }
+            };
+
+            const handleIonCheck = (type) => {
+                const valence = currentElement.config[currentElement.config.length - 1];
+                const isMetal = valence <= 3;
+                const correctType = isMetal ? 'cation' : 'anion';
+
+                if (type === correctType) {
+                    setStep(3);
+                } else {
+                    alert("Foutief. Onthoud: Kation is positief (verliest e-), Anion is negatief (wint e-).");
+                }
+            };
+
+            const handleEquationCheck = () => {
+                const valence = currentElement.config[currentElement.config.length - 1];
+                const isMetal = valence <= 3;
+
+                const targetCharge = isMetal ? valence : -(8 - valence);
+                const targetElectrons = isMetal ? valence : (8 - valence);
+
+                if (eqCharge === targetCharge && eqElectrons === targetElectrons) {
+                    setEqSuccess(true);
+                    setTimeout(() => {
+                        setStep(4);
+                        setEqSuccess(false);
+                    }, 1500); // Wait for animation
+                    setEqError(false);
+                } else {
+                    setEqError(true);
+                }
+            };
+
+            if (!currentElement) return <div className="flex items-center justify-center h-screen">Laden...</div>;
+
+            const valence = currentElement.config[currentElement.config.length - 1];
+            const isMetal = valence <= 3;
+            const isNobleGas = valence === 8 || (currentElement.number === 2 && valence === 2);
+
+            // Calculate displayed electrons based on step
+            let displayedElectrons = currentElement.number;
+            if (step === 0) {
+                displayedElectrons = parsedElectrons;
+            } else if (step === 1) {
+                if (actionType === 'donate') displayedElectrons = currentElement.number - electronCount;
+                if (actionType === 'accept') displayedElectrons = currentElement.number + electronCount;
+                // If stable/null, stays neutral
+            } else if (step >= 2) {
+                // Show the final ion state
+                if (isNobleGas) displayedElectrons = currentElement.number;
+                else displayedElectrons = isMetal ? (currentElement.number - valence) : (currentElement.number + (8 - valence));
+            }
+
+            return (
+                <div className="max-w-7xl mx-auto p-4 md:p-8 w-full">
+                    {/* Main Game Area */}
+                    <Card className="p-4 md:p-6 flex flex-col relative">
+
+                        {/* Element Info Header */}
+                        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-4">
+                            <div>
+                                <h2 className="text-3xl font-bold text-slate-800">{currentElement.name}</h2>
+                                <p className="text-slate-500">Atoomnummer: {currentElement.number}</p>
+                            </div>
+                            <div className="w-20 h-20 bg-slate-100 rounded-xl flex flex-col items-center justify-center border-2 border-slate-200">
+                                <span className="text-3xl font-bold text-slate-800">{currentElement.symbol}</span>
+                                <span className="text-xs text-slate-500">{currentElement.number}</span>
+                            </div>
+                        </div>
+
+                        {/* Visual Model - Always Visible but updates */}
+                        <div className="mb-4">
+                            <VisualModel element={currentElement} displayedElectronCount={displayedElectrons} showConfig={step >= 1} />
+                        </div>
+
+                        {/* Step Content */}
+                        <div className="flex-1 flex flex-col justify-center">
+
+                            {/* Step 1: Configuration */}
+                            {step === 0 && (
+                                <div className="space-y-4 animate-fade-in">
+                                    <div>
+                                        <h3 className="text-xl font-semibold mb-2">Stap 1: Elektronenconfiguratie</h3>
+                                        <p className="text-slate-600 mb-2">Hoe zijn de elektronen verdeeld over de schillen? (bv. 2/8/1)</p>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <input
+                                            type="text"
+                                            value={configInput}
+                                            onChange={(e) => setConfigInput(e.target.value)}
+                                            placeholder="2/8/..."
+                                            className={`w-48 px-4 py-3 rounded-xl border-2 outline-none text-lg transition-colors ${configError ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-blue-500'}`}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleConfigSubmit()}
+                                        />
+                                        <Button onClick={handleConfigSubmit}>
+                                            Controleren
+                                        </Button>
+                                    </div>
+                                    {configError && (
+                                        <p className="text-red-500 text-sm flex items-center gap-2">
+                                            <XIcon /> Dat klopt niet helemaal. Probeer het opnieuw.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Step 2: Stability */}
+                            {step === 1 && (
+                                <div className="space-y-4 animate-fade-in">
+                                    <div>
+                                        <h3 className="text-xl font-semibold mb-2">Stap 2: Stabiliteit (Octetregel)</h3>
+                                        <div className="text-slate-500 mb-2 bg-slate-100 inline-block px-3 py-1 rounded-lg text-sm">
+                                            Configuratie: <span className="font-mono font-bold text-slate-700">{currentElement.config.join("/")}</span>
+                                        </div>
+                                        <p className="text-slate-600">Wat moet er gebeuren om een volle buitenste schil te krijgen?</p>
+                                    </div>
+
+                                    <div className="flex flex-col gap-4">
+                                        <div className="flex flex-wrap gap-4 justify-center">
+                                            <button
+                                                onClick={() => { setActionType('donate'); setElectronCount(0); }}
+                                                className={`px-6 py-4 rounded-xl border-2 font-semibold transition-all ${actionType === 'donate' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 hover:border-blue-300'}`}
+                                            >
+                                                Afstaan (Metalen)
+                                            </button>
+                                            <button
+                                                onClick={() => { setActionType('accept'); setElectronCount(0); }}
+                                                className={`px-6 py-4 rounded-xl border-2 font-semibold transition-all ${actionType === 'accept' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 hover:border-blue-300'}`}
+                                            >
+                                                Opnemen (Niet-Metalen)
+                                            </button>
+                                            <button
+                                                onClick={() => { setActionType('stable'); setElectronCount(0); }}
+                                                className={`px-6 py-4 rounded-xl border-2 font-semibold transition-all ${actionType === 'stable' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 hover:border-emerald-300'}`}
+                                            >
+                                                Is al stabiel
+                                            </button>
+                                        </div>
+
+                                        {(actionType === 'donate' || actionType === 'accept') && (
+                                            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 flex flex-col items-center gap-4">
+                                                <p className="font-medium text-slate-700">Hoeveel elektronen?</p>
+                                                <div className="flex items-center gap-6">
+                                                    <button
+                                                        onClick={() => setElectronCount(Math.max(0, electronCount - 1))}
+                                                        className="w-10 h-10 rounded-full bg-white border border-slate-300 flex items-center justify-center hover:bg-slate-100"
+                                                    >-</button>
+                                                    <span className="text-2xl font-bold w-8 text-center">{electronCount}</span>
+                                                    <button
+                                                        onClick={() => setElectronCount(electronCount + 1)}
+                                                        className="w-10 h-10 rounded-full bg-white border border-slate-300 flex items-center justify-center hover:bg-slate-100"
+                                                    >+</button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {actionType && (
+                                            <div className="flex justify-center mt-2">
+                                                <Button onClick={handleStabilityCheck} className="px-8">
+                                                    Bevestigen
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Step 3: Identify Ion */}
+                            {step === 2 && (
+                                <div className="space-y-4 animate-fade-in">
+                                    <div>
+                                        <h3 className="text-xl font-semibold mb-2">Stap 3: Identificeer het Ion</h3>
+                                        <div className="text-slate-500 mb-2 bg-slate-100 inline-block px-3 py-1 rounded-lg text-sm">
+                                            Configuratie: <span className="font-mono font-bold text-slate-700">{currentElement.config.join("/")}</span>
+                                        </div>
+                                        <p className="text-slate-600">Is het gevormde ion een Kation of een Anion?</p>
+                                    </div>
+                                    <div className="flex flex-wrap justify-center gap-4">
+                                        <button
+                                            onClick={() => handleIonCheck('cation')}
+                                            className="w-64 p-6 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left"
+                                        >
+                                            <div className="font-bold text-lg text-slate-800 group-hover:text-blue-700 mb-1">Kation</div>
+                                            <div className="text-sm text-slate-500">Positief geladen ion (+)</div>
+                                        </button>
+                                        <button
+                                            onClick={() => handleIonCheck('anion')}
+                                            className="w-64 p-6 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left"
+                                        >
+                                            <div className="font-bold text-lg text-slate-800 group-hover:text-blue-700 mb-1">Anion</div>
+                                            <div className="text-sm text-slate-500">Negatief geladen ion (-)</div>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Step 4: Reaction Equation */}
+                            {step === 3 && (
+                                <div className="space-y-4 animate-fade-in">
+                                    <div>
+                                        <h3 className="text-xl font-semibold mb-2">Stap 4: Reactievergelijking</h3>
+                                        <p className="text-slate-600">Maak de reactie kloppend.</p>
+                                    </div>
+
+                                    <div className={`relative p-8 rounded-xl flex flex-wrap items-center justify-center gap-4 text-xl md:text-2xl font-mono transition-all duration-500
+                                        ${eqSuccess ? 'bg-green-50 border-green-200 shadow-[0_0_30px_rgba(34,197,94,0.3)]' : 'bg-white/90 border border-slate-200 shadow-xl backdrop-blur-sm'}
+                                    `}>
+                                        {isMetal ? (
+                                            <>
+                                                <span className="font-bold text-slate-800">{currentElement.symbol}</span>
+                                                <ArrowRightIcon />
+                                                <span className="text-blue-600 flex items-center font-bold">
+                                                    {currentElement.symbol}
+                                                    <sup className="flex items-center ml-1">
+                                                        <select
+                                                            value={eqCharge}
+                                                            onChange={e => setEqCharge(parseInt(e.target.value))}
+                                                            className="bg-slate-100 border border-slate-300 rounded px-1 py-0.5 text-sm outline-none focus:border-blue-500 cursor-pointer"
+                                                        >
+                                                            <option value="0">?</option>
+                                                            {[1, 2, 3, 4].map(n => <option key={n} value={n}>{formatCharge(n)}</option>)}
+                                                        </select>
+                                                    </sup>
+                                                </span>
+                                                <span>+</span>
+                                                <span className="text-amber-500 flex items-center font-bold">
+                                                    <select
+                                                        value={eqElectrons}
+                                                        onChange={e => setEqElectrons(parseInt(e.target.value))}
+                                                        className="bg-slate-100 border border-slate-300 rounded px-1 py-0.5 text-sm outline-none focus:border-amber-500 cursor-pointer mr-1"
+                                                    >
+                                                        <option value="0">?</option>
+                                                        {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
+                                                    </select>
+                                                    e<sup>-</sup>
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="font-bold text-slate-800">{currentElement.symbol}</span>
+                                                <span>+</span>
+                                                <span className="text-amber-500 flex items-center font-bold">
+                                                    <select
+                                                        value={eqElectrons}
+                                                        onChange={e => setEqElectrons(parseInt(e.target.value))}
+                                                        className="bg-slate-100 border border-slate-300 rounded px-1 py-0.5 text-sm outline-none focus:border-amber-500 cursor-pointer mr-1"
+                                                    >
+                                                        <option value="0">?</option>
+                                                        {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
+                                                    </select>
+                                                    e<sup>-</sup>
+                                                </span>
+                                                <ArrowRightIcon />
+                                                <span className="text-blue-600 flex items-center font-bold">
+                                                    {currentElement.symbol}
+                                                    <sup className="flex items-center ml-1">
+                                                        <select
+                                                            value={eqCharge}
+                                                            onChange={e => setEqCharge(parseInt(e.target.value))}
+                                                            className="bg-slate-100 border border-slate-300 rounded px-1 py-0.5 text-sm outline-none focus:border-blue-500 cursor-pointer"
+                                                        >
+                                                            <option value="0">?</option>
+                                                            {[-1, -2, -3, -4].map(n => <option key={n} value={n}>{formatCharge(n)}</option>)}
+                                                        </select>
+                                                    </sup>
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {eqError && (
+                                        <p className="text-red-500 text-center font-medium animate-bounce">
+                                            Nog niet helemaal juist.
+                                        </p>
+                                    )}
+
+                                    <div className="flex justify-center">
+                                        <Button onClick={handleEquationCheck} variant="success" className="px-8">
+                                            Controleren & Afronden <CheckIcon />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Step 5: Success */}
+                            {step === 4 && (
+                                <div className="text-center space-y-4 animate-fade-in py-4">
+                                    <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce shadow-lg">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-4xl font-bold text-slate-800">Uitstekend!</h2>
+                                    <p className="text-slate-600 text-lg">
+                                        {isNobleGas
+                                            ? `${currentElement.name} is een edelgas en reageert niet.`
+                                            : `Je hebt het ${currentElement.name}-ion correct gevormd.`}
+                                    </p>
+
+                                    <div className="flex justify-center gap-4 pt-4">
+                                        <Button onClick={startNewRound} variant="primary" className="text-lg px-8 py-4">
+                                            Volgend Element <ArrowRightIcon />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
